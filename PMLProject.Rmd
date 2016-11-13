@@ -21,15 +21,7 @@ The goal of your project is to predict the manner in which they did the exercise
 
 ##Getting Started
 
-Loading necessary libraries 
-
-library(caret)    
-library(rpart)    
-library(rpart.plot)   
-library(RColorBrewer)   
-library(rattle)   
-library(randomForest)   
-library(knitr)   
+Loading necessary libraries  
 
 ```{r,echo=FALSE, include=FALSE}
 library(caret)
