@@ -1,0 +1,180 @@
+---
+title: "PMLProject"
+author: "Louis Conserve"
+date: "11/12/2016"
+output: html_document
+---
+
+
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+##Project Data
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+##Objective
+The goal of your project is to predict the manner in which they did the exercise. This is the “classe” variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+##Getting Started
+
+Loading necessary libraries 
+
+library(caret)    
+library(rpart)    
+library(rpart.plot)   
+library(RColorBrewer)   
+library(rattle)   
+library(randomForest)   
+library(knitr)   
+
+```{r,echo=FALSE, include=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(knitr)
+```
+###Prepare the datasets
+
+```{r}
+set.seed(12345)
+# Getting the training and test data from source
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+#Reading the training and test data
+training <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
+```
+
+###The training data split in two for training set and testing set
+```{r}
+inTrain <- createDataPartition(training$classe, p=0.6, list=FALSE)
+trainingSet <- training[inTrain, ] # Create a training set
+testSet <- training[-inTrain, ] #Create a testing set from the training data
+dim(trainingSet)
+dim(testSet)
+```
+
+##Cleaning the datasets
+Removing the variables that are very close to zero
+```{r}
+#from training set
+nzv <- nearZeroVar(trainingSet, saveMetrics=TRUE)
+trainingSet <- trainingSet[,nzv$nzv==FALSE]
+#from testing set
+nzv<- nearZeroVar(testSet,saveMetrics=TRUE)
+testSet <- testSet[,nzv$nzv==FALSE]
+#Removing the first column trainingSet dataset
+trainingSet <- trainingSet[c(-1)]
+```
+Cleanning records with more than 70% NA
+```{r}
+trainingSubset <- trainingSet
+for(i in 1:length(trainingSet)) 
+  {if( sum( is.na( trainingSet[, i] ) ) /nrow(trainingSet) >= .7) 
+    {for(j in 1:length(trainingSubset)) 
+      {if( length( grep(names(trainingSet[i]), names(trainingSubset)[j]) ) == 1)  
+        {trainingSubset <- trainingSubset[ , -j]
+        }   
+      } 
+    }
+ }
+trainingSet <- trainingSubset
+rm(trainingSubset)
+```
+Transforming the testSet and testing datasets
+```{r}
+transformA <- colnames(trainingSet)
+transformB <- colnames(trainingSet[, -58])  # remove the classe column
+testSet <- testSet[transformA]  #Only variables in testSet AND in trainingSet are kept
+testing <- testing[transformB]  #Only variables in testing AND in trainingSet are kept
+dim(testSet)
+dim(testing)
+```
+Transforming the testing data into the same type
+```{r}
+for (i in 1:length(testing) ) 
+  {for(j in 1:length(trainingSet)) 
+      { if( length( grep(names(trainingSet[i]), names(testing)[j]) ) == 1)  
+          {class(testing[j]) <- class(trainingSet[i])
+          }      
+       }      
+    }
+# Getting the same class for testing and trainingSet
+testing <- rbind(trainingSet[2, -58] , testing)
+testing <- testing[-1,]
+```
+###Model Building 
+#####Decision Trees Prediction (model A)
+```{r}
+set.seed(777)
+#First Model(A)
+modelA <- rpart(classe ~ ., data=trainingSet, method="class")
+fancyRpartPlot(modelA)
+```
+
+Evaluating the training prediction with the testing set (model A)
+```{r}
+predictModelA <- predict(modelA, testSet, type = "class")
+cmtree <- confusionMatrix(predictModelA, testSet$classe)
+cmtree
+```
+
+#####Random Forests Prediction (Model B)
+```{r}
+set.seed(777)
+#second Model(B)
+ModelB <- randomForest(classe ~ ., data=trainingSet)
+```
+
+Evaluate my training prediction with the testing set (Model B)
+```{r}
+predictModelB <- predict(ModelB, testSet, type = "class")
+cmrf <- confusionMatrix(predictModelB, testSet$classe)
+cmrf
+plot(ModelB)
+```
+
+#####Generalized Boosted Regression Prediction (Model C)
+```{r}
+set.seed(777)
+fitControl <- trainControl(method = "repeatedcv",number = 5,repeats = 1)
+gmbModelC <- train(classe ~ ., data=trainingSet, method = "gbm",trControl = fitControl,verbose = FALSE)
+gbmFinMod1 <- gmbModelC$finalModel
+gbmPredTest <- predict(gmbModelC, newdata=testSet)
+gbmAccuracyTest <- confusionMatrix(gbmPredTest, testSet$classe)
+gbmAccuracyTest
+plot(gmbModelC)
+```
+ 
+##Evaluate Data Result prediction 
+We got 87.89% acuracy from ModelA (Decision Trees Prediction);
+
+We got 99.89% acuracy from ModelB (Random Forests Prediction);
+
+and we got 99.59 acuracy from Model C (Generalized Boosted Regression Prediction);
+
+We are chosing the most accurate model (ModelB) for the final prediction (testing data). We are expecting on getting 0.11% (100%-99.89%) out of sample error.
+```{r}
+predictModelB <- predict(ModelB, testing, type = "class")
+predictModelB 
+
+# Write the results to a text file for submission
+pml_write_files = function(x)
+  {n = length(x)
+   # path <- "/Users/louisconserve/Desktop/Coursera" # given path
+    for(i in 1:n)
+      {filename = paste0("problem_id_",i,".txt")
+        write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+      }
+   }
+#pml_write_files (predictModelB) #export files to given path
+```
+
+Thanks to Stackoverflow Community and Danny
